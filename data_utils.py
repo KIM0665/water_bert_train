@@ -11,29 +11,41 @@ def preprocess_data(df):
     - 숫자형 변환
     - 라벨 인코딩
     """
-    feature_cols = [c for c in df.columns if c.lower().startswith("m")]
+    feature_cols = [c for c in df.columns if c.lower().startswith("측정")]
     
     for col in feature_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df[feature_cols] = df[feature_cols].fillna(df[feature_cols].mean())
     
     le = LabelEncoder()
-    df["alert_label"] = le.fit_transform(df["alert_level"])
+    df["경보등급"] = le.fit_transform(df["경보등급"])
     return df, feature_cols, le
-
 
 def convert_to_text(df, feature_cols):
     """
     BERT 입력용 텍스트 생성
     """
     def row_to_text(row):
-        text = f"{row['swmn_nm']} ({row['detail_adres']}) 수질 데이터: "
-        text += ", ".join([f"{col}: {row[col]:.2f}" for col in feature_cols])
-        print(text)
+        text = f"{row['수문명']} ({row['주소']}) 의 최근 수질 상태는 다음과 같습니다. 수질 데이터: "
+
+        feature_texts = []
+        for col in feature_cols:
+            val = row[col]
+            if val in ["-", None] or str(val).lower() == "-":
+                feature_texts.append(f"{col}: -")
+            else:
+                try:
+                    feature_texts.append(f"{col}: {float(val):.2f}")
+                except Exception:
+                    feature_texts.append(f"{col}: {val}")
+
+        text += ", ".join(feature_texts)
+        text = str(text).replace('nan', '-')
         return text
-    
+
     df["text"] = df.apply(row_to_text, axis=1)
     return df
+
 
 
 def tokenize_data(df, tokenizer, max_length=256):
@@ -47,7 +59,7 @@ def tokenize_data(df, tokenizer, max_length=256):
         max_length=max_length,
         return_tensors="pt"
     )
-    labels = torch.tensor(df["alert_label"].values)
+    labels = torch.tensor(df["경보등급"].values)
     return encodings, labels
 
 
